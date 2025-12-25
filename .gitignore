@@ -13,8 +13,7 @@ ENV/
 # Данные
 /data
 data/*.csv
-*.pkl
-models/*.pkl
+
 
 # IDE
 .vscode/
