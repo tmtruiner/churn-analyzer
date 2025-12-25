@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+.pytest_cache
+
+# Данные
+/data
+data/*.csv
+*.pkl
+models/*.pkl
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Streamlit
+.streamlit/
+
+# OS
+.DS_Store
+Thumbs.db
+
+#Catboost
+/catboost_info
+
+#Plots
+/plots
+
+#Models
+/models
+#other
+metrics_report.txt
+/test_*
+/TODO*
+/users.json
