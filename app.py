@@ -456,140 +456,311 @@ elif page == "Единичный прогноз":
                     st.exception(e)
 
 elif page == "Аналитика":
-    st.header("Аналитика и метрики модели")
-
-    st.subheader("KPI Dashboard")
-
-    if st.session_state.last_predictions is not None and st.session_state.last_input_data is not None:
-        try:
-            from src.metrics import calculate_kpis
-
-            predictions_df = pd.DataFrame(st.session_state.last_predictions)
-            input_data_df = st.session_state.last_input_data
-
-            kpis = calculate_kpis(predictions_df, input_data_df, st.session_state.high_risk_threshold)
-
-            col1, col2, col3, col4 = st.columns(4)
-
-            with col1:
-                st.metric(
-                    "Всего клиентов",
-                    f"{kpis['total_customers']:,}",
-                    help="Общее количество клиентов в анализе"
-                )
-
+    st.header("📈 Аналитика и метрики модели")
+    
+    # Проверяем, есть ли данные для анализа
+    if st.session_state.last_predictions is None:
+        st.info("Для анализа выполните прогноз на странице 'Прогноз'")
+        st.markdown("""
+        После выполнения прогноза здесь появятся:
+        - Графики метрик модели
+        - KPI показатели
+        - Анализ распределения вероятностей
+        """)
+        st.stop()
+    
+    predictions_df = pd.DataFrame(st.session_state.last_predictions)
+    input_data_df = st.session_state.last_input_data
+    
+    # Основные KPI
+    st.subheader("📊 KPI Dashboard")
+    
+    try:
+        # Используем ваш существующий calculate_kpis
+        from src.metrics import calculate_kpis
+        kpis = calculate_kpis(predictions_df, input_data_df, st.session_state.high_risk_threshold)
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Всего клиентов", f"{kpis['total_customers']:,}")
+        with col2:
+            st.metric("Клиентов с риском оттока", f"{kpis['churn_count']:,}")
+        with col3:
+            st.metric("Процент оттока", f"{kpis['churn_rate']:.1f}%")
+        with col4:
+            st.metric("Средняя вероятность", f"{kpis['avg_probability']:.1%}")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric(f"Высокий риск (>{st.session_state.high_risk_threshold:.0%})", 
+                     f"{kpis['high_risk_count']:,}")
+        
+        # Финансовые метрики, если есть
+        if 'monthly_revenue_at_risk' in kpis:
             with col2:
-                st.metric(
-                    "Клиентов с риском оттока",
-                    f"{kpis['churn_count']:,}",
-                    help="Количество клиентов, предсказанных к оттоку"
-                )
-
+                st.metric("Месячная выручка под риском", 
+                         f"${kpis['monthly_revenue_at_risk']:,.0f}")
             with col3:
-                st.metric(
-                    "Процент оттока",
-                    f"{kpis['churn_rate']:.1f}%",
-                    help="Процент клиентов с риском оттока"
-                )
-
+                st.metric("Процент выручки под риском", 
+                         f"{kpis['revenue_risk_percentage']:.1f}%")
             with col4:
-                st.metric(
-                    "Средняя вероятность",
-                    f"{kpis['avg_probability']:.1%}",
-                    help="Средняя вероятность оттока по всем клиентам"
+                st.metric("Общая месячная выручка", 
+                         f"${kpis['total_monthly_revenue']:,.0f}")
+                
+    except ImportError:
+        # Резервный вариант, если модуль не найден
+        total_customers = len(predictions_df)
+        churn_count = predictions_df['churn_prediction'].sum()
+        churn_rate = (churn_count / total_customers) * 100 if total_customers > 0 else 0
+        avg_prob = predictions_df['churn_probability'].mean()
+        high_risk = (predictions_df['churn_probability'] > st.session_state.high_risk_threshold).sum()
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1: st.metric("Всего клиентов", f"{total_customers:,}")
+        with col2: st.metric("Клиентов с риском оттока", f"{churn_count:,}")
+        with col3: st.metric("Процент оттока", f"{churn_rate:.1f}%")
+        with col4: st.metric("Средняя вероятность", f"{avg_prob:.1%}")
+        
+        st.metric(f"Высокий риск (>{st.session_state.high_risk_threshold:.0%})", f"{high_risk:,}")
+    
+    st.markdown("---")
+    
+    # Кнопка для генерации графиков
+    if st.button("🔄 Сгенерировать аналитические графики", type="secondary"):
+        with st.spinner("Генерация графиков..."):
+            try:
+                # Создаем папку plots если её нет
+                import os
+                if not os.path.exists("plots"):
+                    os.makedirs("plots")
+                
+                # 1. Распределение вероятностей (всегда можем построить)
+                st.subheader("📊 Распределение вероятностей оттока")
+                
+                fig = px.histogram(
+                    predictions_df,
+                    x='churn_probability',
+                    nbins=30,
+                    title='Распределение вероятностей оттока',
+                    labels={'churn_probability': 'Вероятность оттока', 'count': 'Количество клиентов'},
+                    color_discrete_sequence=['#636efa']
                 )
-
-            col1, col2, col3, col4 = st.columns(4)
-
-            with col1:
-                st.metric(
-                    f"Высокий риск (>{st.session_state.high_risk_threshold:.0%})",
-                    f"{kpis['high_risk_count']:,}",
-                    help=f"Клиенты с вероятностью оттока выше {st.session_state.high_risk_threshold:.0%}"
-                )
-
-            if 'monthly_revenue_at_risk' in kpis:
-                with col2:
-                    st.metric(
-                        "Месячная выручка под риском",
-                        f"${kpis['monthly_revenue_at_risk']:,.0f}",
-                        help="Ежемесячные платежи клиентов с риском оттока"
+                fig.add_vline(x=st.session_state.high_risk_threshold, 
+                            line_dash="dash", line_color="red",
+                            annotation_text=f"Порог высокого риска ({st.session_state.high_risk_threshold:.0%})")
+                fig.update_layout(showlegend=False)
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # 2. Кластерный анализ, если есть
+                if 'cluster' in predictions_df.columns:
+                    st.subheader("📊 Анализ по кластерам")
+                    
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        cluster_counts = predictions_df['cluster'].value_counts().sort_index()
+                        fig = px.bar(
+                            x=cluster_counts.index.astype(str),
+                            y=cluster_counts.values,
+                            title='Распределение клиентов по кластерам',
+                            labels={'x': 'Кластер', 'y': 'Количество клиентов'},
+                            color=cluster_counts.index.astype(str),
+                            color_discrete_sequence=px.colors.qualitative.Set3
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                    
+                    with col2:
+                        cluster_churn = predictions_df.groupby('cluster')['churn_probability'].mean().sort_index()
+                        fig = px.bar(
+                            x=cluster_churn.index.astype(str),
+                            y=cluster_churn.values,
+                            title='Средняя вероятность оттока по кластерам',
+                            labels={'x': 'Кластер', 'y': 'Средняя вероятность оттока'},
+                            color=cluster_churn.index.astype(str),
+                            color_discrete_sequence=px.colors.sequential.Reds
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                
+                # 3. Корреляция с MonthlyCharges, если есть
+                if input_data_df is not None and 'MonthlyCharges' in input_data_df.columns:
+                    st.subheader("📊 Корреляция с ежемесячными платежами")
+                    
+                    # Объединяем данные
+                    analysis_df = input_data_df.copy()
+                    analysis_df['churn_probability'] = predictions_df['churn_probability']
+                    analysis_df['churn_prediction'] = predictions_df['churn_prediction']
+                    
+                    fig = px.scatter(
+                        analysis_df,
+                        x='MonthlyCharges',
+                        y='churn_probability',
+                        color='churn_prediction',
+                        title='Зависимость вероятности оттока от ежемесячных платежей',
+                        labels={
+                            'MonthlyCharges': 'Ежемесячные платежи ($)',
+                            'churn_probability': 'Вероятность оттока',
+                            'churn_prediction': 'Риск оттока'
+                        },
+                        color_discrete_map={0: 'green', 1: 'red'}
                     )
-
-                with col3:
-                    st.metric(
-                        "Процент выручки под риском",
-                        f"{kpis['revenue_risk_percentage']:.1f}%",
-                        help="Доля месячной выручки от клиентов с риском оттока"
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                # 4. Временной анализ по tenure, если есть
+                if input_data_df is not None and 'tenure' in input_data_df.columns:
+                    st.subheader("📊 Анализ по стажу клиента")
+                    
+                    analysis_df = input_data_df.copy()
+                    analysis_df['churn_probability'] = predictions_df['churn_probability']
+                    analysis_df['churn_prediction'] = predictions_df['churn_prediction']
+                    
+                    # Группируем по стажу
+                    tenure_analysis = analysis_df.groupby('tenure').agg({
+                        'churn_probability': 'mean',
+                        'churn_prediction': 'mean',
+                        'MonthlyCharges': 'mean'
+                    }).reset_index()
+                    
+                    fig = px.line(
+                        tenure_analysis,
+                        x='tenure',
+                        y='churn_probability',
+                        title='Средняя вероятность оттока в зависимости от стажа клиента (месяцы)',
+                        labels={'tenure': 'Стаж (месяцы)', 'churn_probability': 'Средняя вероятность оттока'}
                     )
-
-                with col4:
-                    st.metric(
-                        "Общая месячная выручка",
-                        f"${kpis['total_monthly_revenue']:,.0f}",
-                        help="Общая сумма ежемесячных платежей всех клиентов"
+                    fig.add_scatter(
+                        x=tenure_analysis['tenure'],
+                        y=tenure_analysis['churn_prediction'],
+                        mode='lines',
+                        name='Доля оттока',
+                        yaxis='y2'
                     )
-
-            st.markdown("---")
-
-        except Exception as e:
-            st.warning("Не удалось загрузить данные для KPI. Используйте страницу 'Предсказание' для расчета актуальных метрик.")
-            st.info("KPI метрики будут рассчитаны на основе загруженных данных клиентов")
-
-    plots_dir = Path("plots")
-
-    if plots_dir.exists():
-        with st.container():
-            col1, col2 = st.columns(2)
-            with col1:
-                if (plots_dir / "roc_curve.png").exists():
-                    with st.container():
-                        st.subheader("ROC-кривая")
-                        st.image(str(plots_dir / "roc_curve.png"), use_container_width=True)
-            with col2:
-                if (plots_dir / "pr_curve.png").exists():
-                    with st.container():
-                        st.subheader("Precision-Recall кривая")
-                        st.image(str(plots_dir / "pr_curve.png"), use_container_width=True)
-
-            col1, col2 = st.columns(2)
-            with col1:
-                if (plots_dir / "confusion_matrix.png").exists():
-                    with st.container():
-                        st.subheader("Матрица ошибок")
-                        st.image(str(plots_dir / "confusion_matrix.png"), use_container_width=True)
-            with col2:
-                if (plots_dir / "shap_summary.png").exists():
-                    with st.container():
-                        st.subheader("SHAP анализ важности признаков")
-                        st.image(str(plots_dir / "shap_summary.png"), use_container_width=True)
-
-            if (plots_dir / "feature_importance.csv").exists():
-                with st.container():
-                    st.subheader("Важность признаков (график)")
-                    importance_df = pd.read_csv(plots_dir / "feature_importance.csv")
+                    fig.update_layout(
+                        yaxis2=dict(
+                            title='Доля оттока',
+                            overlaying='y',
+                            side='right'
+                        )
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                # 5. Категориальный анализ по Contract, если есть
+                if input_data_df is not None and 'Contract' in input_data_df.columns:
+                    st.subheader("📊 Анализ по типу контракта")
+                    
+                    analysis_df = input_data_df.copy()
+                    analysis_df['churn_probability'] = predictions_df['churn_probability']
+                    analysis_df['churn_prediction'] = predictions_df['churn_prediction']
+                    
+                    contract_analysis = analysis_df.groupby('Contract').agg({
+                        'churn_probability': 'mean',
+                        'churn_prediction': 'mean',
+                        'MonthlyCharges': 'mean'
+                    }).reset_index()
+                    
                     fig = px.bar(
-                        importance_df.head(15),
+                        contract_analysis,
+                        x='Contract',
+                        y='churn_probability',
+                        title='Средняя вероятность оттока по типу контракта',
+                        labels={'Contract': 'Тип контракта', 'churn_probability': 'Средняя вероятность оттока'},
+                        color='churn_probability',
+                        color_continuous_scale='Reds'
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                st.success("✅ Графики успешно сгенерированы!")
+                
+                # Кнопка для сохранения результатов
+                if st.button("💾 Сохранить результаты анализа"):
+                    # Сохраняем датафрейм с результатами
+                    results_df = predictions_df.copy()
+                    if input_data_df is not None:
+                        # Добавляем исходные данные (без дублирования)
+                        for col in input_data_df.columns:
+                            if col not in results_df.columns:
+                                results_df[col] = input_data_df[col].values
+                    
+                    csv = results_df.to_csv(index=False).encode('utf-8')
+                    st.download_button(
+                        label="Скачать полные результаты (CSV)",
+                        data=csv,
+                        file_name="full_churn_analysis.csv",
+                        mime="text/csv"
+                    )
+                
+            except Exception as e:
+                st.error(f"Ошибка генерации графиков: {str(e)}")
+    
+    else:
+        st.info("Нажмите кнопку 'Сгенерировать аналитические графики' для визуализации данных")
+    
+    # Демо-графики метрик модели (если есть локальные файлы)
+    st.markdown("---")
+    st.subheader("📈 Метрики модели")
+    
+    try:
+        # Пробуем загрузить существующие графики метрик
+        import base64
+        from pathlib import Path
+        
+        plots_dir = Path("plots")
+        
+        if plots_dir.exists():
+            col1, col2 = st.columns(2)
+            
+            # ROC-кривая
+            roc_path = plots_dir / "roc_curve.png"
+            if roc_path.exists():
+                with col1:
+                    st.subheader("ROC-кривая")
+                    st.image(str(roc_path), use_container_width=True)
+            
+            # PR-кривая
+            pr_path = plots_dir / "pr_curve.png"
+            if pr_path.exists():
+                with col2:
+                    st.subheader("Precision-Recall кривая")
+                    st.image(str(pr_path), use_container_width=True)
+            
+            # Матрица ошибок
+            cm_path = plots_dir / "confusion_matrix.png"
+            if cm_path.exists():
+                with col1:
+                    st.subheader("Матрица ошибок")
+                    st.image(str(cm_path), use_container_width=True)
+            
+            # Важность признаков
+            importance_path = plots_dir / "feature_importance.csv"
+            if importance_path.exists():
+                with col2:
+                    st.subheader("Важность признаков")
+                    importance_df = pd.read_csv(importance_path)
+                    
+                    # Показываем топ-15
+                    top_features = importance_df.head(15)
+                    fig = px.bar(
+                        top_features,
                         x='importance',
                         y='feature',
                         orientation='h',
                         title='Топ-15 важных признаков',
-                        labels={'importance': 'Важность', 'feature': 'Признак'}
+                        labels={'importance': 'Важность', 'feature': 'Признак'},
+                        color='importance',
+                        color_continuous_scale='Viridis'
                     )
                     fig.update_layout(yaxis={'categoryorder': 'total ascending'})
                     st.plotly_chart(fig, use_container_width=True)
-
-        if (plots_dir / "feature_importance.csv").exists():
-            st.subheader("Важность признаков (таблица)")
-            importance_df = pd.read_csv(plots_dir / "feature_importance.csv")
-            st.dataframe(importance_df, use_container_width=True)
-    else:
-        st.info("Графики метрик будут доступны после обучения модели с расширенными метриками")
-
-    if Path("metrics_report.txt").exists():
-        with st.expander("Отчет по метрикам", expanded=False):
-            with open("metrics_report.txt", "r", encoding="utf-8") as f:
-                st.text(f.read())
+        
+        else:
+            st.info("""
+            **Примечание:** Графики метрик модели (ROC, PR, матрица ошибок) 
+            будут доступны после обучения модели с расширенными метриками.
+            
+            Для этого выполните команду: `python -m src.train --with-metrics`
+            """)
+            
+    except Exception as e:
+        st.warning(f"Не удалось загрузить графики метрик: {str(e)}")
 
 elif page == "О проекте":
     st.header("О проекте")
