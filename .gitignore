@@ -35,8 +35,6 @@ Thumbs.db
 #Plots
 /plots
 
-#Models
-/models
 #other
 metrics_report.txt
 /test_*

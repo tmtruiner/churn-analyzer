@@ -34,7 +34,7 @@ if 'user_role' not in st.session_state:
 
 st.title("Модуль прогноза оттока клиентов")
 
-API_URL = "http://localhost:8000"
+API_URL = "https://churn-analyzer-7ky6.onrender.com"
 
 if not st.session_state.authenticated:
     st.header("Вход в систему")
