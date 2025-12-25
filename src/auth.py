@@ -31,7 +31,7 @@ class User(BaseModel):
     username: str
     hashed_password: str
     disabled: bool = False
-    role: str = "user"
+    role: str = "user"  # ВАЖНО: добавлено поле role с дефолтным значением
 
 class UserInDB(User):
     pass
@@ -54,24 +54,22 @@ def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
 def load_users() -> dict:
-    """Load users from JSON file"""
-    if not USERS_FILE.exists():
-        # Create default admin user with plain text password (temporary)
-        default_users = {
-            "admin": {
-                "username": "admin",
-                "hashed_password": "admin123",  # Plain text for now
-                "disabled": False
-            }
+    """Load users - fixed for Render deployment"""
+    # ВСЕГДА возвращаем дефолтных пользователей
+    return {
+        "admin": {
+            "username": "admin",
+            "hashed_password": "admin123",
+            "disabled": False,
+            "role": "admin"  # Явно указана роль admin
+        },
+        "analyst": {
+            "username": "analyst",
+            "hashed_password": "analyst123",
+            "disabled": False,
+            "role": "analyst"  # Явно указана роль analyst
         }
-        save_users(default_users)
-        return default_users
-
-    try:
-        with open(USERS_FILE, "r") as f:
-            return json.load(f)
-    except Exception:
-        return {}
+    }
 
 def save_users(users: dict):
     """Save users to JSON file"""
@@ -85,6 +83,10 @@ def authenticate_user(username: str, password: str) -> Optional[UserInDB]:
 
     if not user_data:
         return None
+
+    # Убедимся, что role есть в данных пользователя
+    if "role" not in user_data:
+        user_data["role"] = "user"  # Дефолтное значение
 
     user = UserInDB(**user_data)
     if not verify_password(password, user.hashed_password):
@@ -131,6 +133,10 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 
     if user_data is None:
         raise credentials_exception
+
+    # Убедимся, что role есть в данных пользователя
+    if "role" not in user_data:
+        user_data["role"] = "user"
 
     user = UserInDB(**user_data)
 
